@@ -2,6 +2,7 @@
 
 3D 테트리스 게임으로, AI 기능이 포함된 프로젝트입니다. React와 Three.js를 이용해 구현되었습니다.
 
+실행 주소 : https://dev-canvas-pi.vercel.app/
 
 ## 주요 기능
 
