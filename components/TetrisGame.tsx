@@ -1,7 +1,6 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BoardMatrix, CellValue, Position, ActivePiece, TetrominoShape, GameState } from '../types';
 import { BOARD_WIDTH, BOARD_HEIGHT, BLOCK_SIZE, TETROMINOES, COLORS, INITIAL_FALL_INTERVAL, LEVEL_INTERVAL_DECREMENT, LINES_PER_LEVEL, getRotations } from '../constants';
 

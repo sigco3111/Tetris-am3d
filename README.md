@@ -2,7 +2,6 @@
 
 3D 테트리스 게임으로, AI 기능이 포함된 프로젝트입니다. React와 Three.js를 이용해 구현되었습니다.
 
-![테트리스 AI 마스터 3D](https://via.placeholder.com/600x400?text=테트리스+AI+마스터+3D)
 
 ## 주요 기능
 

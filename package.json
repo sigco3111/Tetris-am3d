@@ -9,8 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.176.0",
-    "three/addons": "0.163.0",
+    "three": "^0.163.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
