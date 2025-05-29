@@ -1,0 +1,6 @@
+{
+  "name": "테트리스 AI 마스터 3D",
+  "description": "Three.js를 사용하여 렌더링된 테트리스 게임으로, 사용자가 카메라 시점을 변경할 수 있습니다. 화살표 키와 스페이스바로 조각을 조종하세요.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
