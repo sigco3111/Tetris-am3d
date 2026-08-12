@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="180px" height="180px" viewBox="0 0 180 180" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <title>테트리스 앱 아이콘</title>
+  <!-- 배경 -->
+  <rect fill="#1A202C" x="0" y="0" width="180" height="180" rx="20"></rect>
+  <g stroke="none">
+    <!-- T 블록 -->
+    <rect fill="#FF00FF" x="45" y="30" width="90" height="40"></rect>
+    <rect fill="#FF00FF" x="90" y="70" width="40" height="40"></rect>
+    
+    <!-- I 블록 -->
+    <rect fill="#00FFFF" x="25" y="110" width="130" height="40"></rect>
+  </g>
+</svg> 
