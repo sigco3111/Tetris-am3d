@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>테트리스 AI 마스터 3D</title>
   <!-- 파비콘 설정 -->
-  <link rel="icon" href="favicon.ico" sizes="any">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="/Tetris-am3d/favicon.ico" sizes="any">
+  <link rel="icon" href="/Tetris-am3d/assets/favicon-wdYlQ1z8.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/Tetris-am3d/apple-touch-icon.png">
   <meta name="theme-color" content="#1a202c">
   <script src="https://cdn.tailwindcss.com"></script>
   <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
@@ -30,7 +30,975 @@
 </head>
 <body>
   <div id="root"></div>
+  <script type="module">
+// index.tsx
+import React3 from "react";
+import ReactDOM from "react-dom/client";
+
+// App.tsx
+import { useState as useState2, useCallback as useCallback2 } from "react";
+
+// components/TetrisGame.tsx
+import { useRef, useEffect, useState, useCallback } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+
+// constants.ts
+var BOARD_WIDTH = 10;
+var BOARD_HEIGHT = 20;
+var BLOCK_SIZE = 1;
+var COLORS = [
+  0,
+  // 0: Empty (not used for pieces)
+  16711680,
+  // 1: I (Red) - Adjusted for better visuals
+  65280,
+  // 2: L (Green)
+  255,
+  // 3: J (Blue)
+  16776960,
+  // 4: O (Yellow)
+  16711935,
+  // 5: S (Magenta)
+  65535,
+  // 6: Z (Cyan)
+  16753920
+  // 7: T (Orange)
+];
+var I_SHAPE = {
+  id: "I",
+  matrix: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+  colorIndex: 1
+};
+var L_SHAPE = {
+  id: "L",
+  matrix: [[0, 2, 0], [0, 2, 0], [0, 2, 2]],
+  colorIndex: 2
+};
+var J_SHAPE = {
+  id: "J",
+  matrix: [[0, 3, 0], [0, 3, 0], [3, 3, 0]],
+  colorIndex: 3
+};
+var O_SHAPE = {
+  id: "O",
+  matrix: [[4, 4], [4, 4]],
+  colorIndex: 4
+};
+var S_SHAPE = {
+  id: "S",
+  matrix: [[0, 5, 5], [5, 5, 0], [0, 0, 0]],
+  colorIndex: 5
+};
+var Z_SHAPE = {
+  id: "Z",
+  matrix: [[6, 6, 0], [0, 6, 6], [0, 0, 0]],
+  colorIndex: 6
+};
+var T_SHAPE = {
+  id: "T",
+  matrix: [[0, 7, 0], [7, 7, 7], [0, 0, 0]],
+  colorIndex: 7
+};
+var TETROMINOES = [I_SHAPE, L_SHAPE, J_SHAPE, O_SHAPE, S_SHAPE, Z_SHAPE, T_SHAPE];
+var INITIAL_FALL_INTERVAL = 1e3;
+var LEVEL_INTERVAL_DECREMENT = 50;
+var LINES_PER_LEVEL = 10;
+var getRotations = (matrix) => {
+  const rotations = [matrix];
+  let currentMatrix = matrix;
+  for (let i = 0; i < 3; i++) {
+    const N = currentMatrix.length;
+    const newMatrix = Array(N).fill(null).map(() => Array(N).fill(0));
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        newMatrix[c][N - 1 - r] = currentMatrix[r][c];
+      }
+    }
+    rotations.push(newMatrix);
+    currentMatrix = newMatrix;
+  }
+  return rotations;
+};
+
+// components/TetrisGame.tsx
+import { jsx } from "react/jsx-runtime";
+var LINE_CLEAR_ANIMATION_DURATION = 300;
+var createEmptyBoard = () => Array(BOARD_HEIGHT).fill(null).map(() => Array(BOARD_WIDTH).fill(0));
+var TetrisGame = ({
+  gameState,
+  setGameState,
+  score,
+  setScore,
+  linesCleared,
+  setLinesCleared,
+  level,
+  setLevel,
+  nextPiecePreview,
+  setNextPiecePreview,
+  onGameOver,
+  isAiActive
+}) => {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const controlsRef = useRef(null);
+  const clockRef = useRef(new THREE.Clock());
+  const boardGroupRef = useRef(new THREE.Group());
+  const currentPieceGroupRef = useRef(new THREE.Group());
+  const blockGeometryRef = useRef(null);
+  const blockMaterialsRef = useRef([]);
+  const flashMaterialRef = useRef(null);
+  const [board, setBoard] = useState(createEmptyBoard());
+  const [currentPiece, setCurrentPiece] = useState(null);
+  const fallIntervalRef = useRef(INITIAL_FALL_INTERVAL);
+  const lastFallTimeRef = useRef(0);
+  const currentPieceRef = useRef(null);
+  const boardRef = useRef(createEmptyBoard());
+  const aiActionInProgressRef = useRef(false);
+  const aiThinkTimeoutRef = useRef(null);
+  const aiCurrentBestMoveRef = useRef(null);
+  const aiStepTimeoutRef = useRef(null);
+  const AI_STEP_INTERVAL = 75;
+  const prevGameStateRef = useRef(null);
+  const clearingRowsRef = useRef([]);
+  const isLineClearingAnimationActiveRef = useRef(false);
+  const lineClearEffectTimeoutRef = useRef(null);
+  useEffect(() => {
+    currentPieceRef.current = currentPiece;
+  }, [currentPiece]);
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+  const spawnNewPiece = useCallback(() => {
+    const randomIndex = Math.floor(Math.random() * TETROMINOES.length);
+    const shape = TETROMINOES[randomIndex];
+    const matrices = getRotations(shape.matrix.map((row) => row.map((cell) => cell > 0 ? shape.colorIndex : 0)));
+    return {
+      shape,
+      matrices,
+      rotation: 0,
+      position: { row: 0, col: Math.floor(BOARD_WIDTH / 2) - Math.floor(matrices[0][0].length / 2) }
+    };
+  }, []);
+  const checkCollision = useCallback((piece, pos, boardToCheck) => {
+    const matrix = piece.matrices[piece.rotation];
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        if (matrix[r][c] !== 0) {
+          const boardRow = pos.row + r;
+          const boardCol = pos.col + c;
+          if (boardRow >= BOARD_HEIGHT || boardCol < 0 || boardCol >= BOARD_WIDTH || boardRow >= 0 && boardToCheck[boardRow] && boardToCheck[boardRow][boardCol] !== 0) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }, []);
+  useEffect(() => {
+    const previousGameState = prevGameStateRef.current;
+    prevGameStateRef.current = gameState;
+    if (gameState === 0 /* Playing */) {
+      if (previousGameState === 3 /* Initial */ || previousGameState === 2 /* GameOver */ || previousGameState === null) {
+        setBoard(createEmptyBoard());
+        const newCurrentPiece = spawnNewPiece();
+        setCurrentPiece(newCurrentPiece);
+        if (setNextPiecePreview) {
+          setNextPiecePreview(spawnNewPiece());
+        }
+        fallIntervalRef.current = Math.max(100, INITIAL_FALL_INTERVAL - (level - 1) * LEVEL_INTERVAL_DECREMENT);
+        isLineClearingAnimationActiveRef.current = false;
+        clearingRowsRef.current = [];
+      }
+      lastFallTimeRef.current = performance.now();
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+    } else if (gameState === 2 /* GameOver */ || gameState === 3 /* Initial */ || gameState === 1 /* Paused */) {
+      if (gameState !== 1 /* Paused */) {
+        setCurrentPiece(null);
+      }
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+      if (lineClearEffectTimeoutRef.current) {
+        clearTimeout(lineClearEffectTimeoutRef.current);
+        lineClearEffectTimeoutRef.current = null;
+      }
+      isLineClearingAnimationActiveRef.current = false;
+      clearingRowsRef.current = [];
+    }
+  }, [gameState, level, spawnNewPiece, setNextPiecePreview]);
+  const lockPiece = useCallback((pieceToLock) => {
+    if (!pieceToLock) {
+      aiActionInProgressRef.current = false;
+      return;
+    }
+    if (isLineClearingAnimationActiveRef.current) return;
+    const newBoard = boardRef.current.map((row) => [...row]);
+    const matrix = pieceToLock.matrices[pieceToLock.rotation];
+    matrix.forEach((row, r) => {
+      row.forEach((cell, c) => {
+        if (cell !== 0) {
+          const boardRow = pieceToLock.position.row + r;
+          const boardCol = pieceToLock.position.col + c;
+          if (boardRow >= 0 && boardRow < BOARD_HEIGHT && boardCol >= 0 && boardCol < BOARD_WIDTH) {
+            newBoard[boardRow][boardCol] = cell;
+          }
+        }
+      });
+    });
+    let isLockPhaseGameOver = false;
+    const lockedMatrix = pieceToLock.matrices[pieceToLock.rotation];
+    for (let r_idx = 0; r_idx < lockedMatrix.length; r_idx++) {
+      for (let c_idx = 0; c_idx < lockedMatrix[r_idx].length; c_idx++) {
+        if (lockedMatrix[r_idx][c_idx] !== 0 && pieceToLock.position.row + r_idx < 0) {
+          isLockPhaseGameOver = true;
+          break;
+        }
+      }
+      if (isLockPhaseGameOver) break;
+    }
+    if (isLockPhaseGameOver) {
+      onGameOver();
+      setCurrentPiece(null);
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+      if (lineClearEffectTimeoutRef.current) clearTimeout(lineClearEffectTimeoutRef.current);
+      isLineClearingAnimationActiveRef.current = false;
+      clearingRowsRef.current = [];
+      return;
+    }
+    let linesToClearIndices = [];
+    for (let r = BOARD_HEIGHT - 1; r >= 0; r--) {
+      if (newBoard[r].every((cell) => cell !== 0)) {
+        linesToClearIndices.push(r);
+      }
+    }
+    setBoard(newBoard);
+    if (linesToClearIndices.length > 0) {
+      clearingRowsRef.current = linesToClearIndices;
+      isLineClearingAnimationActiveRef.current = true;
+      setCurrentPiece(null);
+      if (lineClearEffectTimeoutRef.current) clearTimeout(lineClearEffectTimeoutRef.current);
+      lineClearEffectTimeoutRef.current = window.setTimeout(() => {
+        const boardAfterClearVisuals = boardRef.current.map((row) => [...row]);
+        let linesClearedThisTurn = 0;
+        const sortedClearingRows = [...clearingRowsRef.current].sort((a, b) => b - a);
+        for (const rowIndex of sortedClearingRows) {
+          boardAfterClearVisuals.splice(rowIndex, 1);
+          boardAfterClearVisuals.unshift(Array(BOARD_WIDTH).fill(0));
+          linesClearedThisTurn++;
+        }
+        setBoard(boardAfterClearVisuals);
+        if (linesClearedThisTurn > 0) {
+          const newTotalLines = linesCleared + linesClearedThisTurn;
+          setLinesCleared(newTotalLines);
+          setScore((prevScore) => prevScore + linesClearedThisTurn * 100 * linesClearedThisTurn * level);
+          const newLevel = Math.floor(newTotalLines / LINES_PER_LEVEL) + 1;
+          if (newLevel > level) {
+            setLevel(newLevel);
+            fallIntervalRef.current = Math.max(100, INITIAL_FALL_INTERVAL - (newLevel - 1) * LEVEL_INTERVAL_DECREMENT);
+          }
+        }
+        let newPieceToSpawn = null;
+        if (nextPiecePreview) {
+          newPieceToSpawn = nextPiecePreview;
+          if (setNextPiecePreview) setNextPiecePreview(spawnNewPiece());
+        } else {
+          newPieceToSpawn = spawnNewPiece();
+          if (setNextPiecePreview) setNextPiecePreview(spawnNewPiece());
+        }
+        if (newPieceToSpawn && checkCollision(newPieceToSpawn, newPieceToSpawn.position, boardAfterClearVisuals)) {
+          onGameOver();
+        } else {
+          setCurrentPiece(newPieceToSpawn);
+        }
+        clearingRowsRef.current = [];
+        isLineClearingAnimationActiveRef.current = false;
+        aiActionInProgressRef.current = false;
+        aiCurrentBestMoveRef.current = null;
+        if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+        lastFallTimeRef.current = performance.now();
+      }, LINE_CLEAR_ANIMATION_DURATION);
+    } else {
+      let newPieceToSpawn = null;
+      if (nextPiecePreview) {
+        newPieceToSpawn = nextPiecePreview;
+        if (setNextPiecePreview) setNextPiecePreview(spawnNewPiece());
+      } else {
+        newPieceToSpawn = spawnNewPiece();
+        if (setNextPiecePreview) setNextPiecePreview(spawnNewPiece());
+      }
+      if (newPieceToSpawn && checkCollision(newPieceToSpawn, newPieceToSpawn.position, newBoard)) {
+        onGameOver();
+        setCurrentPiece(null);
+      } else {
+        setCurrentPiece(newPieceToSpawn);
+      }
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+    }
+  }, [nextPiecePreview, spawnNewPiece, setLinesCleared, setScore, setLevel, level, linesCleared, onGameOver, setNextPiecePreview, checkCollision, boardRef]);
+  const movePiece = useCallback((dRow, dCol) => {
+    if (!currentPieceRef.current || gameState !== 0 /* Playing */ || isLineClearingAnimationActiveRef.current) return false;
+    const newPosition = { row: currentPieceRef.current.position.row + dRow, col: currentPieceRef.current.position.col + dCol };
+    if (!checkCollision(currentPieceRef.current, newPosition, boardRef.current)) {
+      setCurrentPiece((prev) => prev ? { ...prev, position: newPosition } : null);
+      return true;
+    }
+    return false;
+  }, [checkCollision, gameState, setCurrentPiece]);
+  const moveDown = useCallback(() => {
+    if (!currentPieceRef.current || gameState !== 0 /* Playing */ || isLineClearingAnimationActiveRef.current) return;
+    if (!movePiece(1, 0)) {
+      lockPiece(currentPieceRef.current);
+    }
+  }, [movePiece, lockPiece, gameState]);
+  const rotatePiece = useCallback(() => {
+    if (!currentPieceRef.current || gameState !== 0 /* Playing */ || isLineClearingAnimationActiveRef.current) return;
+    const newRotation = (currentPieceRef.current.rotation + 1) % currentPieceRef.current.matrices.length;
+    const rotatedPiece = { ...currentPieceRef.current, rotation: newRotation };
+    if (!checkCollision(rotatedPiece, currentPieceRef.current.position, boardRef.current)) {
+      setCurrentPiece(rotatedPiece);
+    } else {
+      const testOffsets = [-1, 1, -2, 2];
+      for (const offset of testOffsets) {
+        const testPosition = { row: currentPieceRef.current.position.row, col: currentPieceRef.current.position.col + offset };
+        if (!checkCollision(rotatedPiece, testPosition, boardRef.current)) {
+          setCurrentPiece({ ...rotatedPiece, position: testPosition });
+          return;
+        }
+      }
+      if (currentPieceRef.current.shape.id === "I" && currentPieceRef.current.position.row <= 1) {
+        const testPositionUp1 = { ...currentPieceRef.current.position, row: currentPieceRef.current.position.row - 1 };
+        if (!checkCollision(rotatedPiece, testPositionUp1, boardRef.current)) {
+          setCurrentPiece({ ...rotatedPiece, position: testPositionUp1 });
+          return;
+        }
+        const testPositionUp2 = { ...currentPieceRef.current.position, row: currentPieceRef.current.position.row - 2 };
+        if (!checkCollision(rotatedPiece, testPositionUp2, boardRef.current)) {
+          setCurrentPiece({ ...rotatedPiece, position: testPositionUp2 });
+          return;
+        }
+      } else if (currentPieceRef.current.position.row <= 1) {
+        const testPositionUp = { ...currentPieceRef.current.position, row: currentPieceRef.current.position.row - 1 };
+        if (!checkCollision(rotatedPiece, testPositionUp, boardRef.current)) {
+          setCurrentPiece({ ...rotatedPiece, position: testPositionUp });
+          return;
+        }
+      }
+    }
+  }, [checkCollision, gameState, setCurrentPiece]);
+  const hardDrop = useCallback(() => {
+    if (!currentPieceRef.current || gameState !== 0 /* Playing */ || isLineClearingAnimationActiveRef.current) return;
+    let pieceToDrop = { ...currentPieceRef.current };
+    let newPosition = { ...pieceToDrop.position };
+    while (!checkCollision(pieceToDrop, { row: newPosition.row + 1, col: newPosition.col }, boardRef.current)) {
+      newPosition.row++;
+    }
+    const finalPieceState = { ...currentPieceRef.current, position: newPosition };
+    lockPiece(finalPieceState);
+  }, [gameState, checkCollision, lockPiece]);
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (isLineClearingAnimationActiveRef.current) return;
+      if (isAiActive && gameState === 0 /* Playing */) {
+        event.preventDefault();
+        return;
+      }
+      if (gameState !== 0 /* Playing */ || !currentPieceRef.current) {
+        if (event.key === " " && gameState === 0 /* Playing */ && !currentPieceRef.current && !isLineClearingAnimationActiveRef.current) {
+          event.preventDefault();
+        }
+        return;
+      }
+      if (event.key === " ") event.preventDefault();
+      switch (event.key) {
+        case "ArrowLeft":
+          movePiece(0, -1);
+          break;
+        case "ArrowRight":
+          movePiece(0, 1);
+          break;
+        case "ArrowDown":
+          lastFallTimeRef.current = performance.now();
+          moveDown();
+          break;
+        case "ArrowUp":
+        case "x":
+        case "X":
+          rotatePiece();
+          break;
+        case " ":
+          hardDrop();
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [gameState, movePiece, moveDown, rotatePiece, hardDrop, isAiActive]);
+  const evaluateBoardState = (tempBoard, piece, dropRow) => {
+    let score2 = 0;
+    let linesClearedCount = 0;
+    const boardAfterPlace = tempBoard.map((r) => [...r]);
+    const matrix = piece.matrices[piece.rotation];
+    let isPlacedGameOver = false;
+    matrix.forEach((rowCells, r) => {
+      rowCells.forEach((cell, c) => {
+        if (cell !== 0) {
+          const finalRow = dropRow + r;
+          const finalCol = piece.position.col + c;
+          if (finalRow >= 0 && finalRow < BOARD_HEIGHT && finalCol >= 0 && finalCol < BOARD_WIDTH) {
+            boardAfterPlace[finalRow][finalCol] = cell;
+          } else if (finalRow < 0) {
+            isPlacedGameOver = true;
+          }
+        }
+      });
+    });
+    if (isPlacedGameOver) return -Infinity;
+    for (let r_idx = BOARD_HEIGHT - 1; r_idx >= 0; ) {
+      if (boardAfterPlace[r_idx].every((cellVal) => cellVal !== 0)) {
+        linesClearedCount++;
+        boardAfterPlace.splice(r_idx, 1);
+        boardAfterPlace.unshift(Array(BOARD_WIDTH).fill(0));
+      } else {
+        r_idx--;
+      }
+    }
+    score2 += linesClearedCount * 5e3;
+    let aggregateHeight = 0;
+    const heights = Array(BOARD_WIDTH).fill(0);
+    for (let c = 0; c < BOARD_WIDTH; c++) {
+      for (let r_idx = 0; r_idx < BOARD_HEIGHT; r_idx++) {
+        if (boardAfterPlace[r_idx][c] !== 0) {
+          heights[c] = BOARD_HEIGHT - r_idx;
+          break;
+        }
+      }
+      aggregateHeight += heights[c];
+    }
+    score2 -= aggregateHeight * 10;
+    let holes = 0;
+    for (let c = 0; c < BOARD_WIDTH; c++) {
+      let blockReached = false;
+      for (let r_idx = 0; r_idx < BOARD_HEIGHT; r_idx++) {
+        if (boardAfterPlace[r_idx][c] !== 0) {
+          blockReached = true;
+        } else if (blockReached && boardAfterPlace[r_idx][c] === 0) {
+          holes++;
+        }
+      }
+    }
+    score2 -= holes * 75;
+    let bumpiness = 0;
+    for (let c = 0; c < BOARD_WIDTH - 1; c++) {
+      bumpiness += Math.abs(heights[c] - heights[c + 1]);
+    }
+    score2 -= bumpiness * 3;
+    return score2;
+  };
+  const calculateBestMove = useCallback((piece, currentBoard) => {
+    let bestMove = null;
+    for (let rot = 0; rot < piece.matrices.length; rot++) {
+      const currentMatrix = piece.matrices[rot];
+      let minCShape = currentMatrix[0].length;
+      let maxCShape = -1;
+      let pieceIsEmpty = true;
+      for (let r_shape = 0; r_shape < currentMatrix.length; ++r_shape) {
+        for (let c_shape = 0; c_shape < currentMatrix[r_shape].length; ++c_shape) {
+          if (currentMatrix[r_shape][c_shape] !== 0) {
+            pieceIsEmpty = false;
+            minCShape = Math.min(minCShape, c_shape);
+            maxCShape = Math.max(maxCShape, c_shape);
+          }
+        }
+      }
+      if (pieceIsEmpty) continue;
+      for (let col = -minCShape; col <= BOARD_WIDTH - 1 - maxCShape; col++) {
+        const testPiece = {
+          ...piece,
+          rotation: rot,
+          position: { row: 0, col }
+        };
+        let simulatedRow = 0;
+        if (checkCollision(testPiece, { row: 0, col }, currentBoard)) {
+          let canPlaceHigher = false;
+          for (let rOffset = -1; rOffset >= -3; rOffset--) {
+            if (!checkCollision(testPiece, { row: rOffset, col }, currentBoard)) {
+              simulatedRow = rOffset;
+              canPlaceHigher = true;
+              break;
+            }
+          }
+          if (!canPlaceHigher && checkCollision(testPiece, { row: 0, col }, currentBoard)) continue;
+        }
+        let currentSimulatedRow = simulatedRow;
+        while (!checkCollision(testPiece, { row: currentSimulatedRow + 1, col }, currentBoard)) {
+          currentSimulatedRow++;
+        }
+        const finalDropRow = currentSimulatedRow;
+        const scoreForMove = evaluateBoardState(currentBoard, { ...testPiece, position: { row: finalDropRow, col } }, finalDropRow);
+        if (bestMove === null || scoreForMove > bestMove.score) {
+          bestMove = { targetRotation: rot, targetCol: col, score: scoreForMove, finalRow: finalDropRow };
+        }
+      }
+    }
+    return bestMove;
+  }, [checkCollision]);
+  const executeAiStep = useCallback(() => {
+    if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+    if (!isAiActive || gameState !== 0 /* Playing */ || !currentPieceRef.current || !aiCurrentBestMoveRef.current || isLineClearingAnimationActiveRef.current) {
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      return;
+    }
+    const piece = currentPieceRef.current;
+    const targetMove = aiCurrentBestMoveRef.current;
+    let actionTaken = false;
+    if (piece.rotation !== targetMove.targetRotation) {
+      const rotatedPieceState = { ...piece, rotation: targetMove.targetRotation };
+      if (!checkCollision(rotatedPieceState, piece.position, boardRef.current)) {
+        setCurrentPiece(rotatedPieceState);
+        actionTaken = true;
+      } else {
+        const testOffsets = [-1, 1, -2, 2];
+        let kicked = false;
+        for (const offset of testOffsets) {
+          const testPosition = { ...piece.position, col: piece.position.col + offset };
+          if (!checkCollision(rotatedPieceState, testPosition, boardRef.current)) {
+            setCurrentPiece({ ...rotatedPieceState, position: testPosition });
+            actionTaken = true;
+            kicked = true;
+            break;
+          }
+        }
+        if (!kicked && (piece.shape.id === "I" || piece.shape.id === "L" || piece.shape.id === "J") && piece.position.row <= 1) {
+          const upOffsets = [-1, -2];
+          for (const upOffset of upOffsets) {
+            const testPositionUp = { ...piece.position, row: piece.position.row + upOffset };
+            if (!checkCollision(rotatedPieceState, testPositionUp, boardRef.current)) {
+              setCurrentPiece({ ...rotatedPieceState, position: testPositionUp });
+              actionTaken = true;
+              kicked = true;
+              break;
+            }
+          }
+        }
+        if (!kicked) {
+          lockPiece(currentPieceRef.current);
+          return;
+        }
+      }
+    } else if (piece.position.col !== targetMove.targetCol) {
+      const direction = targetMove.targetCol > piece.position.col ? 1 : -1;
+      if (movePiece(0, direction)) {
+        actionTaken = true;
+      } else {
+        lockPiece(currentPieceRef.current);
+        return;
+      }
+    } else if (piece.position.row < targetMove.finalRow) {
+      if (movePiece(1, 0)) {
+        actionTaken = true;
+      } else {
+        lockPiece(currentPieceRef.current);
+        return;
+      }
+    } else {
+      lockPiece(currentPieceRef.current);
+      return;
+    }
+    if (actionTaken && aiActionInProgressRef.current) {
+      aiStepTimeoutRef.current = window.setTimeout(executeAiStep, AI_STEP_INTERVAL);
+    } else if (!actionTaken && aiActionInProgressRef.current) {
+      lockPiece(currentPieceRef.current);
+    }
+  }, [isAiActive, gameState, checkCollision, movePiece, lockPiece, setCurrentPiece, boardRef, AI_STEP_INTERVAL]);
+  useEffect(() => {
+    if (isLineClearingAnimationActiveRef.current) {
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+      return;
+    }
+    if (isAiActive && gameState === 0 /* Playing */ && currentPieceRef.current && !aiActionInProgressRef.current) {
+      aiActionInProgressRef.current = true;
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      const thinkTime = fallIntervalRef.current > 0 ? Math.min(fallIntervalRef.current / 2, 200) : 100;
+      aiThinkTimeoutRef.current = window.setTimeout(() => {
+        const piece = currentPieceRef.current;
+        const CBoard = boardRef.current;
+        if (!piece || !CBoard || !isAiActive || gameState !== 0 /* Playing */ || isLineClearingAnimationActiveRef.current) {
+          aiActionInProgressRef.current = false;
+          return;
+        }
+        const bestMove = calculateBestMove(piece, CBoard);
+        if (bestMove) {
+          aiCurrentBestMoveRef.current = bestMove;
+          executeAiStep();
+        } else {
+          if (currentPieceRef.current) {
+            if (!movePiece(1, 0)) {
+              lockPiece(currentPieceRef.current);
+            } else {
+              aiActionInProgressRef.current = false;
+            }
+          } else {
+            aiActionInProgressRef.current = false;
+          }
+        }
+      }, thinkTime);
+    }
+    return () => {
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+    };
+  }, [isAiActive, gameState, currentPiece, calculateBestMove, executeAiStep, lockPiece, movePiece]);
+  useEffect(() => {
+    if (!isAiActive) {
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+      aiActionInProgressRef.current = false;
+      aiCurrentBestMoveRef.current = null;
+    }
+  }, [isAiActive]);
+  useEffect(() => {
+    if (!mountRef.current) return;
+    sceneRef.current = new THREE.Scene();
+    sceneRef.current.background = new THREE.Color(2963272);
+    cameraRef.current = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1e3);
+    cameraRef.current.position.set(BOARD_WIDTH * BLOCK_SIZE / 2 - BLOCK_SIZE / 2, BOARD_HEIGHT * BLOCK_SIZE / 4, BOARD_HEIGHT * BLOCK_SIZE * 0.75);
+    rendererRef.current = new THREE.WebGLRenderer({ antialias: true });
+    rendererRef.current.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    rendererRef.current.setPixelRatio(window.devicePixelRatio);
+    mountRef.current.appendChild(rendererRef.current.domElement);
+    controlsRef.current = new OrbitControls(cameraRef.current, rendererRef.current.domElement);
+    controlsRef.current.target.set(BOARD_WIDTH * BLOCK_SIZE / 2 - BLOCK_SIZE / 2, BOARD_HEIGHT * BLOCK_SIZE / 2 - BLOCK_SIZE / 2, 0);
+    controlsRef.current.enablePan = true;
+    controlsRef.current.enableZoom = true;
+    const ambientLight = new THREE.AmbientLight(16777215, 0.6);
+    sceneRef.current.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(16777215, 0.8);
+    directionalLight.position.set(5, 10, 7.5);
+    sceneRef.current.add(directionalLight);
+    sceneRef.current.add(boardGroupRef.current);
+    sceneRef.current.add(currentPieceGroupRef.current);
+    const boardOutlineGeometry = new THREE.BoxGeometry(BOARD_WIDTH * BLOCK_SIZE, BOARD_HEIGHT * BLOCK_SIZE, BLOCK_SIZE);
+    const boardOutlineEdges = new THREE.EdgesGeometry(boardOutlineGeometry);
+    const boardOutlineMaterial = new THREE.LineBasicMaterial({ color: 11184810 });
+    const boardOutlineMesh = new THREE.LineSegments(boardOutlineEdges, boardOutlineMaterial);
+    boardOutlineMesh.position.set(
+      (BOARD_WIDTH / 2 - 0.5) * BLOCK_SIZE,
+      (BOARD_HEIGHT / 2 - 0.5) * BLOCK_SIZE,
+      -BLOCK_SIZE / 2
+    );
+    sceneRef.current.add(boardOutlineMesh);
+    if (!blockGeometryRef.current) {
+      blockGeometryRef.current = new THREE.BoxGeometry(BLOCK_SIZE * 0.95, BLOCK_SIZE * 0.95, BLOCK_SIZE * 0.95);
+    }
+    if (blockMaterialsRef.current.length === 0) {
+      COLORS.forEach((colorHex) => {
+        blockMaterialsRef.current.push(new THREE.MeshStandardMaterial({ color: colorHex }));
+      });
+    }
+    if (!flashMaterialRef.current) {
+      flashMaterialRef.current = new THREE.MeshStandardMaterial({
+        color: 16777215,
+        emissive: 15658734,
+        emissiveIntensity: 1,
+        transparent: true,
+        opacity: 1
+      });
+    }
+    const handleResize = () => {
+      if (cameraRef.current && rendererRef.current && mountRef.current) {
+        cameraRef.current.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+        cameraRef.current.updateProjectionMatrix();
+        rendererRef.current.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    clockRef.current.start();
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (rendererRef.current) rendererRef.current.dispose();
+      if (mountRef.current && rendererRef.current && mountRef.current.contains(rendererRef.current.domElement)) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+      }
+      if (controlsRef.current) controlsRef.current.dispose();
+      if (blockGeometryRef.current) {
+        blockGeometryRef.current.dispose();
+        blockGeometryRef.current = null;
+      }
+      blockMaterialsRef.current.forEach((material) => material.dispose());
+      blockMaterialsRef.current = [];
+      if (flashMaterialRef.current) {
+        flashMaterialRef.current.dispose();
+        flashMaterialRef.current = null;
+      }
+      boardOutlineGeometry.dispose();
+      boardOutlineMaterial.dispose();
+      clockRef.current.stop();
+      if (aiThinkTimeoutRef.current) clearTimeout(aiThinkTimeoutRef.current);
+      if (aiStepTimeoutRef.current) clearTimeout(aiStepTimeoutRef.current);
+      if (lineClearEffectTimeoutRef.current) clearTimeout(lineClearEffectTimeoutRef.current);
+    };
+  }, []);
+  useEffect(() => {
+    if (!sceneRef.current || !cameraRef.current || !rendererRef.current || !blockGeometryRef.current || blockMaterialsRef.current.length === 0) return;
+    let animationFrameId;
+    const animate = (timestamp) => {
+      animationFrameId = requestAnimationFrame(animate);
+      if (gameState === 0 /* Playing */ && currentPieceRef.current && !isAiActive && !isLineClearingAnimationActiveRef.current) {
+        if (timestamp - lastFallTimeRef.current > fallIntervalRef.current) {
+          moveDown();
+          lastFallTimeRef.current = timestamp;
+        }
+      }
+      while (boardGroupRef.current.children.length > 0) {
+        boardGroupRef.current.remove(boardGroupRef.current.children[0]);
+      }
+      while (currentPieceGroupRef.current.children.length > 0) {
+        currentPieceGroupRef.current.remove(currentPieceGroupRef.current.children[0]);
+      }
+      boardRef.current.forEach((row, r) => {
+        row.forEach((cell, c) => {
+          if (cell !== 0 && cell < blockMaterialsRef.current.length) {
+            let material = blockMaterialsRef.current[cell];
+            if (isLineClearingAnimationActiveRef.current && clearingRowsRef.current.includes(r)) {
+              if (flashMaterialRef.current) {
+                material = flashMaterialRef.current;
+                const flashProgress = performance.now() % (LINE_CLEAR_ANIMATION_DURATION / 1.5) / (LINE_CLEAR_ANIMATION_DURATION / 1.5);
+                const intensity = Math.sin(flashProgress * Math.PI) * 0.4 + 0.6;
+                flashMaterialRef.current.emissiveIntensity = intensity;
+                flashMaterialRef.current.opacity = intensity;
+              }
+            }
+            const cube = new THREE.Mesh(blockGeometryRef.current, material);
+            cube.position.set(
+              c * BLOCK_SIZE,
+              (BOARD_HEIGHT - 1 - r) * BLOCK_SIZE,
+              0
+            );
+            boardGroupRef.current.add(cube);
+          }
+        });
+      });
+      if (currentPieceRef.current) {
+        const pieceToRender = currentPieceRef.current;
+        const matrix = pieceToRender.matrices[pieceToRender.rotation];
+        matrix.forEach((row, r) => {
+          row.forEach((cell, c) => {
+            if (cell !== 0 && cell < blockMaterialsRef.current.length) {
+              const material = blockMaterialsRef.current[cell];
+              const cube = new THREE.Mesh(blockGeometryRef.current, material);
+              cube.position.set(
+                (pieceToRender.position.col + c) * BLOCK_SIZE,
+                (BOARD_HEIGHT - 1 - (pieceToRender.position.row + r)) * BLOCK_SIZE,
+                0
+              );
+              currentPieceGroupRef.current.add(cube);
+            }
+          });
+        });
+      }
+      if (controlsRef.current) controlsRef.current.update();
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [gameState, moveDown, isAiActive]);
+  return /* @__PURE__ */ jsx("div", { ref: mountRef, className: "w-full h-full" });
+};
+var TetrisGame_default = TetrisGame;
+
+// App.tsx
+import { jsx as jsx2, jsxs } from "react/jsx-runtime";
+var App = () => {
+  const [gameState, setGameState] = useState2(3 /* Initial */);
+  const [score, setScore] = useState2(0);
+  const [linesCleared, setLinesCleared] = useState2(0);
+  const [level, setLevel] = useState2(1);
+  const [nextPiecePreview, setNextPiecePreview] = useState2(null);
+  const [isAiActive, setIsAiActive] = useState2(false);
+  const startGame = () => {
+    setScore(0);
+    setLinesCleared(0);
+    setLevel(1);
+    setNextPiecePreview(null);
+    setGameState(0 /* Playing */);
+  };
+  const pauseGame = () => {
+    if (gameState === 0 /* Playing */) setGameState(1 /* Paused */);
+  };
+  const resumeGame = () => {
+    if (gameState === 1 /* Paused */) setGameState(0 /* Playing */);
+  };
+  const handleGameOver = useCallback2(() => {
+    setGameState(2 /* GameOver */);
+  }, []);
+  const NextPieceDisplay = ({ piece }) => {
+    if (!piece) return /* @__PURE__ */ jsx2("div", { className: "w-24 h-24 border border-gray-600 bg-gray-800 flex items-center justify-center text-xs rounded", children: "\uBBF8\uB9AC\uBCF4\uAE30 \uC5C6\uC74C" });
+    const matrix = piece.matrices[piece.rotation];
+    let minR = matrix.length, maxR = -1, minC = matrix[0].length, maxC = -1;
+    let hasBlocks = false;
+    matrix.forEach((row, rIdx) => {
+      row.forEach((cell, cIdx) => {
+        if (cell !== 0) {
+          hasBlocks = true;
+          minR = Math.min(minR, rIdx);
+          maxR = Math.max(maxR, rIdx);
+          minC = Math.min(minC, cIdx);
+          maxC = Math.max(maxC, cIdx);
+        }
+      });
+    });
+    if (!hasBlocks) return /* @__PURE__ */ jsx2("div", { className: "w-24 h-24 border border-gray-600 bg-gray-800 flex items-center justify-center text-xs rounded", children: "\uBBF8\uB9AC\uBCF4\uAE30 \uC5C6\uC74C" });
+    const pieceHeight = maxR - minR + 1;
+    const pieceWidth = maxC - minC + 1;
+    const displayGridSize = 4;
+    return /* @__PURE__ */ jsx2("div", { className: "grid grid-cols-4 gap-0.5 p-1 border border-gray-600 bg-gray-700 rounded", style: { width: "6rem", height: "6rem" }, children: Array(displayGridSize * displayGridSize).fill(0).map((_, i) => {
+      const r = Math.floor(i / displayGridSize);
+      const c = Math.floor(i % displayGridSize);
+      const displayRowOffset = Math.floor((displayGridSize - pieceHeight) / 2);
+      const displayColOffset = Math.floor((displayGridSize - pieceWidth) / 2);
+      const matrixRow = r - displayRowOffset;
+      const matrixCol = c - displayColOffset;
+      let cellValue = 0;
+      if (matrixRow >= 0 && matrixRow < pieceHeight && matrixCol >= 0 && matrixCol < pieceWidth) {
+        if (matrix[matrixRow + minR] && matrix[matrixRow + minR][matrixCol + minC] !== 0) {
+          cellValue = matrix[matrixRow + minR][matrixCol + minC];
+        }
+      }
+      const color = cellValue ? COLORS[cellValue] : "transparent";
+      const hexColor = typeof color === "number" ? `#${color.toString(16).padStart(6, "0")}` : color;
+      const style = { backgroundColor: hexColor };
+      return /* @__PURE__ */ jsx2("div", { className: "w-full h-full", style }, i);
+    }) });
+  };
+  return /* @__PURE__ */ jsxs("div", { className: "flex flex-col w-screen h-screen bg-gray-900 text-white p-2 md:p-4 gap-2 items-center justify-start overflow-hidden", children: [
+    /* @__PURE__ */ jsx2("h1", { className: "text-3xl md:text-4xl font-bold text-center w-full shrink-0 my-1 md:my-2", children: "\uD14C\uD2B8\uB9AC\uC2A4 AI \uB9C8\uC2A4\uD130 3D" }),
+    /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-center shrink-0 my-1 md:my-2", children: [
+      /* @__PURE__ */ jsx2("h3", { className: "text-lg md:text-xl font-semibold mb-1 md:mb-2 text-center", children: "\uB2E4\uC74C \uC870\uAC01:" }),
+      /* @__PURE__ */ jsx2(NextPieceDisplay, { piece: nextPiecePreview })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "flex flex-col md:flex-row w-full flex-grow items-stretch gap-4 min-h-0", children: [
+      /* @__PURE__ */ jsxs("div", { className: "flex-grow relative w-full md:w-3/4 min-h-0 order-1", children: [
+        gameState === 2 /* GameOver */ && /* @__PURE__ */ jsxs("div", { className: "absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-10", children: [
+          /* @__PURE__ */ jsx2("h2", { className: "text-3xl md:text-4xl font-bold text-red-500", children: "\uAC8C\uC784 \uC885\uB8CC" }),
+          /* @__PURE__ */ jsxs("p", { className: "text-lg md:text-xl mt-2", children: [
+            "\uC810\uC218: ",
+            score
+          ] }),
+          /* @__PURE__ */ jsx2(
+            "button",
+            {
+              onClick: startGame,
+              className: "mt-6 md:mt-8 px-5 py-2 md:px-6 md:py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-lg md:text-xl font-semibold transition-colors",
+              children: "\uB2E4\uC2DC \uC2DC\uC791"
+            }
+          )
+        ] }),
+        gameState === 3 /* Initial */ && /* @__PURE__ */ jsx2("div", { className: "absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-10", children: /* @__PURE__ */ jsx2(
+          "button",
+          {
+            onClick: startGame,
+            className: "px-6 py-3 md:px-8 md:py-4 bg-green-600 hover:bg-green-700 rounded-lg text-xl md:text-2xl font-semibold transition-colors",
+            children: "\uAC8C\uC784 \uC2DC\uC791"
+          }
+        ) }),
+        /* @__PURE__ */ jsx2(
+          TetrisGame_default,
+          {
+            gameState,
+            setGameState,
+            score,
+            setScore,
+            linesCleared,
+            setLinesCleared,
+            level,
+            setLevel,
+            nextPiecePreview,
+            setNextPiecePreview,
+            onGameOver: handleGameOver,
+            isAiActive
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "w-full md:w-1/4 p-3 md:p-4 bg-gray-800 rounded-lg shadow-xl flex flex-col gap-3 items-stretch overflow-y-auto order-2 min-h-0", children: [
+        /* @__PURE__ */ jsxs("div", { className: "flex flex-row gap-2 justify-start items-center mb-1 md:mb-2 w-full", children: [
+          gameState === 0 /* Playing */ && /* @__PURE__ */ jsx2("button", { onClick: pauseGame, className: "px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base bg-yellow-500 hover:bg-yellow-600 rounded text-black font-semibold transition-colors", children: "\uC77C\uC2DC\uC815\uC9C0" }),
+          gameState === 1 /* Paused */ && /* @__PURE__ */ jsx2("button", { onClick: resumeGame, className: "px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base bg-green-500 hover:bg-green-600 rounded text-white font-semibold transition-colors", children: "\uACC4\uC18D\uD558\uAE30" }),
+          (gameState === 0 /* Playing */ || gameState === 1 /* Paused */ || gameState === 2 /* GameOver */) && /* @__PURE__ */ jsx2("button", { onClick: startGame, className: "px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base bg-red-600 hover:bg-red-700 rounded text-white font-semibold transition-colors", children: "\uAC8C\uC784 \uC7AC\uC2DC\uC791" })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-start gap-3 mt-2 md:mt-1", children: [
+          " ",
+          /* @__PURE__ */ jsx2("label", { htmlFor: "ai-toggle", className: "text-sm md:text-base text-gray-300", children: "AI \uC704\uC784:" }),
+          /* @__PURE__ */ jsx2(
+            "button",
+            {
+              id: "ai-toggle",
+              onClick: () => setIsAiActive((prev) => !prev),
+              disabled: gameState !== 0 /* Playing */ && gameState !== 1 /* Paused */,
+              className: `w-20 px-3 py-1 rounded text-white font-semibold text-sm transition-colors text-center ${// Removed text-left, added text-center
+              isAiActive ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-600 hover:bg-gray-500"} ${gameState !== 0 /* Playing */ && gameState !== 1 /* Paused */ ? "opacity-50 cursor-not-allowed" : ""}`,
+              "aria-pressed": isAiActive,
+              children: isAiActive ? "ON" : "OFF"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "w-full text-sm md:text-lg mt-2 md:mt-1", children: [
+          /* @__PURE__ */ jsxs("p", { children: [
+            /* @__PURE__ */ jsx2("span", { className: "font-semibold", children: "\uC810\uC218:" }),
+            " ",
+            score
+          ] }),
+          /* @__PURE__ */ jsxs("p", { children: [
+            /* @__PURE__ */ jsx2("span", { className: "font-semibold", children: "\uC904 \uC218:" }),
+            " ",
+            linesCleared
+          ] }),
+          /* @__PURE__ */ jsxs("p", { children: [
+            /* @__PURE__ */ jsx2("span", { className: "font-semibold", children: "\uB808\uBCA8:" }),
+            " ",
+            level
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "text-xs md:text-sm text-gray-400 w-full mt-2 md:mt-3", children: [
+          /* @__PURE__ */ jsx2("h3", { className: "font-semibold text-gray-300 md:text-gray-200", children: "\uC870\uC791\uBC95:" }),
+          /* @__PURE__ */ jsx2("p", { children: "\uD654\uC0B4\uD45C: \uC774\uB3D9" }),
+          /* @__PURE__ */ jsx2("p", { children: "\uC704 \uD654\uC0B4\uD45C / X: \uD68C\uC804" }),
+          /* @__PURE__ */ jsx2("p", { children: "\uC2A4\uD398\uC774\uC2A4\uBC14: \uBE60\uB978 \uB0B4\uB9BC" }),
+          /* @__PURE__ */ jsx2("p", { children: "\uB9C8\uC6B0\uC2A4: \uCE74\uBA54\uB77C \uD68C\uC804" }),
+          isAiActive && /* @__PURE__ */ jsx2("p", { className: "text-yellow-400 mt-1", children: "AI \uC704\uC784 \uD65C\uC131\uB428 (\uC218\uB3D9 \uC870\uC791 \uBE44\uD65C\uC131\uD654)" })
+        ] })
+      ] })
+    ] })
+  ] });
+};
+var App_default = App;
+
+// index.tsx
+import { jsx as jsx3 } from "react/jsx-runtime";
+var rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+var root = ReactDOM.createRoot(rootElement);
+root.render(
+  /* @__PURE__ */ jsx3(React3.StrictMode, { children: /* @__PURE__ */ jsx3(App_default, {}) })
+);
+
+  </script>
 </body>
 </html>
-<link rel="stylesheet" href="index.css">
-<script src="index.tsx" type="module"></script>

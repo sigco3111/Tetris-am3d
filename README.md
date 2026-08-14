@@ -2,7 +2,9 @@
 
 3D 테트리스 게임으로, AI 기능이 포함된 프로젝트입니다. React와 Three.js를 이용해 구현되었습니다.
 
-실행 주소 : https://dev-canvas-pi.vercel.app/
+라이브 데모 : https://sigco3111.github.io/Tetris-am3d/
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-222222?style=for-the-badge&logo=githubpages)](https://sigco3111.github.io/Tetris-am3d/)
 
 ## 주요 기능
 
@@ -51,6 +53,16 @@ npm run build
 
 빌드된 파일은 `dist` 폴더에 생성됩니다.
 
+## 배포
+
+이 저장소는 GitHub Actions 또는 수동 gh-pages 브랜치 푸시로 배포됩니다. `vite.config.ts`에 `base: '/Tetris-am3d/'`가 박혀 있어 빌드 결과가 gh-pages 서브경로에서 정상 작동합니다.
+
+```bash
+npm install
+npm run build
+npx gh-pages -d dist
+```
+
 ## 프로젝트 구조
 
 ```
@@ -68,4 +80,4 @@ MIT
 
 ## 개발자
 
-[개발자 이름/팀명]
+[sigco3111](https://github.com/sigco3111)
